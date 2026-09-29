@@ -1,40 +1,38 @@
 # German Electricity Load Forecasting
 
-I built a model that predicts **Germany's hourly electricity demand** from historical
-data. It loads six years of real load data, explores the daily and seasonal patterns,
-engineers time-based and lag features, and trains a gradient-boosting model — evaluated
-with a time-based train/test split.
+A model that predicts Germany's hourly electricity demand from past data. It uses six
+years of load data, looks at the daily and seasonal patterns, builds time and lag
+features, and trains a gradient-boosting model. I tested it with a time-based split so
+the scores are realistic.
 
 ## Results
 
 | Model | R² | MAE |
 |---|---|---|
-| **Gradient boosting (mine)** | **0.970** | **1,227 MW** (~2.2% of avg load) |
+| Gradient boosting (mine) | 0.970 | 1,227 MW (~2.2% of avg load) |
 | Naive baseline (same hour last week) | 0.844 | 2,273 MW |
 
-My model **cuts the error nearly in half** versus the naive baseline — confirming it adds
-real predictive value, not just luck.
+The model has about half the error of the naive baseline, so it is clearly adding
+something over just reusing last week's value.
 
 ![Actual vs predicted for one test week](forecast.png)
 
-The model tracks the daily demand wave and the weekend dip closely.
+It follows the daily up-and-down and the weekend dip pretty closely.
 
 ## Approach
 
-1. **Data** — hourly German load, Jan 2015 → Sep 2020 (50,400 rows), from the free
-   [Open Power System Data](https://open-power-system-data.org/) time series.
-2. **Exploration** — demand is lowest overnight (~44 GW) and peaks mid-morning (~64 GW),
-   and is higher in winter than summer. These patterns guided the features.
-3. **Features** — hour, day of week, month, weekend flag, **public-holiday flag**
-   (German holidays), and two **lag features**: the load 24 hours ago (same hour
-   yesterday) and 168 hours ago (a week ago). Lags are the strongest predictors, since
-   demand repeats daily and weekly.
-4. **Model** — `HistGradientBoostingRegressor` (scikit-learn).
-5. **Evaluation** — a **time-based split** (train on the earliest 80%, test on the most
-   recent 20%). I avoided a random split on purpose: shuffling would let the model see
-   future data during training (data leakage) and overstate its accuracy. I also compared
-   against a **naive baseline** (predict the same hour from last week) to prove the model
-   earns its keep.
+1. Data: hourly German load from Jan 2015 to Sep 2020 (50,400 rows), from the free
+   [Open Power System Data](https://open-power-system-data.org/) set.
+2. Exploration: demand is lowest overnight (~44 GW), peaks mid-morning (~64 GW), and is
+   higher in winter than summer. I used these patterns to pick the features.
+3. Features: hour, day of week, month, a weekend flag, a German public-holiday flag, and
+   two lag features (the load 24 hours ago and 168 hours / one week ago). The lags matter
+   most, because demand repeats every day and every week.
+4. Model: HistGradientBoostingRegressor from scikit-learn.
+5. Evaluation: I split by time (train on the first 80%, test on the last 20%) instead of
+   doing it randomly. A random split lets the model see future data during training, which makes
+   the scores look better than they really are. I also compared against a simple baseline
+   (just reuse last week's value) to check the model actually helps.
 
 ## Run it
 
@@ -50,14 +48,14 @@ instant. It prints the metrics and saves `forecast.png`.
 
 ## What I learned
 
-- Lag features can carry most of the signal in a time series — simple, but powerful.
-- For forecasting you must split by time, not randomly, or your scores lie.
-- How to go from a raw public dataset to a clean, validated model end to end.
+- The lag features do most of the work. Simple, but they help a lot.
+- For forecasting you have to split by time, not randomly, or the scores lie.
+- How to take a raw public dataset all the way to a working, tested model.
 
 ## Possible extensions
 
-Add weather (temperature drives heating/cooling demand), or forecast further ahead than
-one hour (multi-step / recursive forecasting).
+Add temperature (it drives heating and cooling demand), or forecast more than one hour
+ahead.
 
 ---
-*Tech: Python, pandas, scikit-learn, matplotlib.*
+Tech: Python, pandas, scikit-learn, matplotlib.
