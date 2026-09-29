@@ -9,6 +9,7 @@ Run:  python energy_model.py
 """
 
 import os
+import holidays
 import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -16,7 +17,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 # ---- config ----
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(HERE, "de_load.csv")            # cached after the first download
+CACHE = os.path.join(HERE, "de_load.csv")          
 # Open Power System Data - hourly time series (free, no login). ~130 MB one-time download.
 OPSD_URL = ("https://data.open-power-system-data.org/time_series/2020-10-06/"
             "time_series_60min_singleindex.csv")
@@ -51,7 +52,7 @@ def load_data():
 def main():
     df = load_data()
 
-    # --- Exploratory analysis: demand has strong daily and seasonal rhythms ---
+    #  Exploratory analysis: demand has strong daily and seasonal rhythms
     df["hour"] = df["timestamp"].dt.hour            # 0-23
     df["dayofweek"] = df["timestamp"].dt.dayofweek  # 0 = Monday ... 6 = Sunday
     df["month"] = df["timestamp"].dt.month          # 1-12
@@ -60,20 +61,22 @@ def main():
     print("\nAverage load by month (MW):")
     print(df.groupby("month")["load_mw"].mean().round(0))
 
-    # --- Features ---
+    # Features
     # Time features plus the two most predictive signals in load forecasting:
     # the load 24 hours ago (same hour yesterday) and 168 hours ago (a week ago).
+    de_holidays = holidays.Germany(years=range(2015, 2021))
+    df["is_holiday"] = df["timestamp"].dt.date.map(lambda d: int(d in de_holidays))
     df["is_weekend"] = (df["dayofweek"] >= 5).astype(int)
     df["lag_24"] = df["load_mw"].shift(24)
     df["lag_168"] = df["load_mw"].shift(168)
     df = df.dropna()                                # drop early rows with no lag value
 
-    features = ["hour", "dayofweek", "month", "is_weekend", "lag_24", "lag_168"]
+    features = ["hour", "dayofweek", "month", "is_holiday", "is_weekend", "lag_24", "lag_168"]
     X = df[features]
     y = df["load_mw"]
     print("\nFeatures:", X.shape, "| target:", y.shape)
 
-    # --- Model + honest evaluation ---
+    # Model + honest evaluation
     # Split by TIME, not randomly: train on the earliest 80%, test on the most
     # recent 20%. Random shuffling would leak future data and inflate the score.
     n = int(len(df) * 0.8)
@@ -87,7 +90,11 @@ def main():
     print("\nMAE:", round(mean_absolute_error(y_test, pred), 0), "MW")
     print("R2 :", round(r2_score(y_test, pred), 3))
 
-    # --- Plot one test week: actual vs predicted ---
+    #  Baseline: naive forecast = same hour last week
+    baseline = X_test["lag_168"]     # naive forecast = same hour last week
+    print("\nBaseline (last week) MAE:", round(mean_absolute_error(y_test, baseline), 0), "MW")
+    print("Baseline (last week) R2 :", round(r2_score(y_test, baseline), 3))
+    # Plot one test week: actual vs predicted
     plt.figure(figsize=(12, 4))
     plt.plot(y_test.values[:168], label="actual")     # 168 hours = one week
     plt.plot(pred[:168], label="predicted")
